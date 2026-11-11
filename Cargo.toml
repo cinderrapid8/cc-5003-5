@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/align-core", "crates/align-cli"]
+exclude = ["crates/align-tauri"]
+# The Tauri GUI crate (crates/align-tauri) is excluded from the default build
+# because it requires the system webkit2gtk/GTK toolchain. Build it with:
+#   cd crates/align-tauri && cargo build
+# on a host where `tauri dev` prerequisites are installed.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://example.invalid/band-align"
+
+[workspace.dependencies]
+align-core = { path = "crates/align-core" }
+hound = "3.5"
+rustfft = "6.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Band Rehearsal Alignment</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Band Rehearsal Alignment</h1>
+      <div class="project-controls">
+        <button id="new-project">New project</button>
+        <button id="save-project">Save project…</button>
+        <button id="load-project">Load project…</button>
+        <span id="epoch-badge" class="badge" title="Cache epoch">epoch 1</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" id="tracks-panel">
+        <h2>Tracks</h2>
+        <button id="import-track">Import WAV…</button>
+        <table id="tracks-table">
+          <thead>
+            <tr>
+              <th>Ref</th><th>Name</th><th>Rate</th><th>Ch</th><th>Duration</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="hint">
+          Nominal sample rates must match. Actual clock differences are modelled
+          by the fitted time map, never assumed away.
+        </p>
+      </section>
+
+      <section class="panel" id="analysis-panel">
+        <h2>Analysis</h2>
+        <div class="button-row">
+          <button id="detect">Detect anchors</button>
+          <button id="fit">Fit delay + drift</button>
+          <button id="render">Render aligned stems…</button>
+          <button id="export-positions">Export positions CSV…</button>
+        </div>
+        <div id="fit-summary"></div>
+      </section>
+
+      <section class="panel wide" id="anchors-panel">
+        <h2>Anchors</h2>
+        <p class="hint">
+          Each row is an independent reference event. Pick among correlation
+          candidates when repeated beats create several peaks, or mark a region
+          unknown — low-confidence parts are extrapolated for preview only and
+          never force-fit over the performance.
+        </p>
+        <div class="table-wrap">
+          <table id="anchors-table">
+            <thead>
+              <tr>
+                <th>Ref time (s)</th>
+                <th>Member time (s)</th>
+                <th>Lag (ms)</th>
+                <th>Confidence</th>
+                <th>Residual (ms)</th>
+                <th>Status</th>
+                <th>Candidates</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel wide" id="map-panel">
+        <h2>Time map &amp; output rule</h2>
+        <div id="map-view"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

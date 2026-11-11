@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities for the band-align main window. Only the core runtime is needed; file paths are collected through application prompts.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}
