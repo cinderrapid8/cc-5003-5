@@ -6,6 +6,7 @@ pub mod estimate;
 pub mod hash;
 pub mod map;
 pub mod onset;
+pub mod package;
 pub mod pipeline;
 pub mod project;
 pub mod render;

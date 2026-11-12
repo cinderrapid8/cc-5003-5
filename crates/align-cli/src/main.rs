@@ -1,5 +1,8 @@
 use align_core::audio::{write_wav_f32, AudioBuffer, AudioReader};
 use align_core::estimate::fit_track;
+use align_core::package::{
+    migrate_package, MediaMode, MigrationOptions, ProjectStorage,
+};
 use align_core::pipeline::{detect_anchors, PipelineConfig};
 use align_core::render::{mix_stems, render_project, RenderOptions};
 use align_core::synth::{
@@ -26,6 +29,7 @@ fn run() -> align_core::Result<()> {
         Some("align") => cmd_align(&args[2..]),
         Some("export-positions") => cmd_export_positions(&args[2..]),
         Some("verify-project") => cmd_verify_project(&args[2..]),
+        Some("migrate-package") => cmd_migrate_package(&args[2..]),
         _ => {
             print_usage();
             Ok(())
@@ -39,9 +43,11 @@ fn print_usage() {
          align-cli synthesize --out DIR [--rate 48000] [--duration 60] [--delay 0.12] \
          [--drift-ppm 75] [--channels 2] [--ref-gap 20:24] [--member-gap 35:37]\n\
          align-cli init-project --name N --reference WAV --member WAV [--member WAV ...] --out FILE\n\
-         align-cli align --project FILE --out DIR\n\
-         align-cli export-positions --project FILE --out positions.csv\n\
-         align-cli verify-project --project FILE --truth FILE --out FILE"
+         align-cli align --project FILE|PKG_DIR --out DIR\n\
+         align-cli export-positions --project FILE|PKG_DIR --out positions.csv\n\
+         align-cli verify-project --project FILE|PKG_DIR --truth FILE --out FILE\n\
+         align-cli migrate-package --project FILE --out PKG_DIR [--mode copy|reference] \\\n\
+         [--force] [--probe-hz 440]"
     );
 }
 
@@ -60,7 +66,7 @@ fn cmd_export_positions(args: &[String]) -> align_core::Result<()> {
         }
         i += 2;
     }
-    let project = Project::load(&project_path.unwrap())?;
+    let project = ProjectStorage::detect(&project_path.unwrap())?.load()?.project;
     let mut csv = String::from(
         "anchor_id,track_id,ref_time_secs,member_original_secs,lag_secs,mapped_project_secs,residual_secs,status,confidence\n",
     );
@@ -298,10 +304,12 @@ fn cmd_align(args: &[String]) -> align_core::Result<()> {
         i += 2;
     }
     let project_path = project_path.expect("--project required");
-    let mut project = Project::load(&project_path)?;
+    let storage = ProjectStorage::detect(&project_path)?;
+    let loaded = storage.load()?;
+    let mut project = loaded.project;
     std::fs::create_dir_all(&out)?;
 
-    let base = project_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let base = loaded.media_base;
     let ref_meta = project.reference()?.clone();
     let reference = AudioReader::load(&base.join(&ref_meta.path))?;
 
@@ -433,7 +441,7 @@ fn cmd_align(args: &[String]) -> align_core::Result<()> {
         write_wav_f32(&out.join("before_after.wav"), &before_after)?;
     }
 
-    project.save(&project_path)?;
+    storage.save(&project)?;
     std::fs::write(
         out.join("render_reports.json"),
         serde_json::to_string_pretty(&reports)?,
@@ -463,7 +471,7 @@ fn cmd_verify_project(args: &[String]) -> align_core::Result<()> {
         }
         i += 2;
     }
-    let project = Project::load(&project_path.unwrap())?;
+    let project = ProjectStorage::detect(&project_path.unwrap())?.load()?.project;
     let truth: GroundTruth =
         serde_json::from_str(&std::fs::read_to_string(truth_path.unwrap())?)?;
     let map = project
@@ -520,6 +528,62 @@ fn cmd_verify_project(args: &[String]) -> align_core::Result<()> {
         std::fs::write(p, json)?;
     } else {
         println!("{json}");
+    }
+    Ok(())
+}
+
+/// Migrate a legacy single-file project into a versioned portable package.
+/// The alignment pipeline is actually run against the committed package and
+/// the residuals / channel-phase evidence is written into the package; any
+/// failure rolls the target back and leaves a rollback report next to it.
+fn cmd_migrate_package(args: &[String]) -> align_core::Result<()> {
+    let mut project_path = None;
+    let mut out = None;
+    let mut mode = MediaMode::Copy;
+    let mut force = false;
+    let mut probe_hz = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--project" => project_path = Some(PathBuf::from(&args[i + 1])),
+            "--out" => out = Some(PathBuf::from(&args[i + 1])),
+            "--mode" => {
+                mode = match args[i + 1].as_str() {
+                    "copy" => MediaMode::Copy,
+                    "reference" => MediaMode::Reference,
+                    other => panic!("unknown media mode: {other}"),
+                }
+            }
+            "--probe-hz" => probe_hz = Some(args[i + 1].parse().unwrap()),
+            "--force" => {
+                force = true;
+                i += 1;
+                continue;
+            }
+            other => panic!("unknown migrate-package flag: {other}"),
+        }
+        i += 2;
+    }
+    let project_path = project_path.expect("--project required");
+    let out = out.expect("--out required");
+    let report = migrate_package(
+        &project_path,
+        &out,
+        &MigrationOptions {
+            mode,
+            force,
+            probe_hz,
+        },
+    )?;
+    println!("outcome: {:?}", report.outcome);
+    for step in &report.steps {
+        println!("  [{}] {}", step.name, step.detail);
+    }
+    if let Some(p) = &report.preservation {
+        println!("preservation: {:?}", p.verdict);
+    }
+    if report.outcome == align_core::package::MigrationOutcome::Completed {
+        println!("package at {} (report: migration.json)", out.display());
     }
     Ok(())
 }

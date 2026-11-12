@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,6 +25,20 @@ pub enum AlignError {
     IncompatibleRate(u32, u32),
     #[error("render position outside source: t={t:.6}s")]
     OutsideSource { t: f64 },
+    #[error("package already exists at {0}; use --force to replace it")]
+    PackageExists(PathBuf),
+    #[error("not a project package (missing package.json): {0}")]
+    NotAPackage(PathBuf),
+    #[error("unsupported package format version {0}")]
+    UnsupportedPackageVersion(u32),
+    #[error("media hash mismatch for track {track}: expected {expected}, got {got}")]
+    MediaHashMismatch {
+        track: String,
+        expected: String,
+        got: String,
+    },
+    #[error("migration validation failed: {0}")]
+    MigrationValidation(String),
     #[error("{0}")]
     Other(String),
 }

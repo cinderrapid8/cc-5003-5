@@ -8,7 +8,7 @@ exclude = ["crates/align-tauri"]
 # on a host where `tauri dev` prerequisites are installed.
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://example.invalid/band-align"
@@ -18,5 +18,7 @@ align-core = { path = "crates/align-core" }
 hound = "3.5"
 rustfft = "6.2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# float_roundtrip: project files are an audit trail — anchor times and map
+# joints must survive a save/load cycle bit-exactly (see map.rs project_t0).
+serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "1"

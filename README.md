@@ -22,6 +22,7 @@ crates/align-core/         纯 Rust 核心库，无 GUI 依赖
   src/render.rs            加窗 sinc 重采样、统一输出长度与补零规则
   src/pipeline.rs          检测编排（全局粗延迟 → 局部精修 → 缺口保护）
   src/project.rs           工程文件、参考切换与缓存纪元
+  src/package.rs           版本化工程包、存储迁移、适配层与执行证据
   src/synth.rs             已知延迟/漂移的合成测试素材
   src/verify.rs            估计误差、相位连续性、声道一致性
   src/hash.rs              无依赖 SHA-256（源文件指纹）
@@ -68,6 +69,44 @@ scripts/verify_synthetic.sh 一键可复现数值验证
 拟合摘要以及缺口元数据。`epoch` 在参考切换或源变更时递增；旧纪元的派生缓存
 会被 `check_epoch` 显式拒绝（`StaleCache` 错误），切换参考会清空锚点与映射，
 杜绝新旧缓存混用。
+
+## 可移植工程包与存储迁移
+
+单文件工程（格式 v1）可以迁移为版本化的可移植工程包（格式 v2）：
+
+```
+align-cli migrate-package --project project.json --out name.bandalign \
+                          [--mode copy|reference] [--force] [--probe-hz 440]
+```
+
+工程包是一个自描述的目录：
+
+```
+name.bandalign/
+  package.json     清单：格式版本、媒体模式、每条轨的 SHA-256、来源摘要
+  project.json     工程本体（version=2），锚点/映射/缺口逐字节保留
+  media/           复制进来的素材（仅 --mode copy）
+  evidence/        迁移校验时在目标路径实跑对齐得到的证据
+  migration.json   迁移报告：版本、有序步骤、回退日志、语义保留判定
+```
+
+- `--mode copy` 把素材复制进包内（自包含、可整体搬运）；`--mode reference`
+  只保存绝对路径引用与哈希，素材保持原位。两种模式都逐轨校验 SHA-256。
+- 迁移器不擅自修正数据：缺段元数据、Unknown/Rejected 锚点及其残差原样
+  携带，不做任何归一化。
+- 重复迁移是显式 no-op（清单记录来源摘要，相同来源直接报告
+  `AlreadyMigrated`）；目标已存在不同内容时需 `--force`，旧包先备份、
+  新包验证通过后才丢弃备份。
+- 任何一步失败都会回退：暂存目录或已提交的包被移除、备份被恢复，并在
+  目标旁写出 `<name>.rollback-report.json`，版本与回退步骤全部可追踪。
+- 提交后迁移器会在**目标路径**实跑一遍 检测→拟合→渲染，把映射残差与
+  声道相位写进 `evidence/`，并与旧工程保存的拟合摘要对比（延迟差
+  ≤ 2 ms、漂移差 ≤ 25 ppm、RMS 残差 ≤ 2 ms、声道差 ≤ 1e-6）；判定为
+  语义退化同样触发回退。证据运行不允许用默认值遮失败：文件缺失或拟合
+  失败直接报错退出。
+- `align` / `export-positions` / `verify-project` 的 `--project` 同时接受
+  旧 JSON 文件与工程包目录（由存储适配层区分，轨道路径相对各自基底解析）。
+
 
 ## 构建与测试
 
@@ -116,6 +155,8 @@ align-cli align --project project.json --out aligned/
 align-cli export-positions --project project.json --out positions.csv
 align-cli verify-project --project project.json --truth synth/truth.json \
                          --aligned-dir aligned --out verification.json
+align-cli migrate-package --project project.json --out name.bandalign \
+                          [--mode copy|reference] [--force] [--probe-hz 440]
 ```
 
 `aligned/` 内除每条分轨外，还包含 `mix_preview.wav`（等增益混音）与
